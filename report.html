@@ -1,0 +1,38 @@
+<header>
+    <h2>Your daily report</h2>
+    <h4>%(date)s</h4>
+</header>
+<div>
+    <strong>Total successes:</strong>
+    <ul>
+        <li>Today: %(today_successes)d</li>
+        <li>Overall: %(overall_successes)d</li>
+    </ul>
+</div>
+<div>
+    <strong>Total failures:</strong>
+    <ul>
+        <li>Today: %(today_failures)d</li>
+        <li>Overall: %(overall_failures)d</li>
+    </ul>
+</div>
+<div>
+    <strong>Down secs:</strong>
+    <ul>
+        <li>Today: %(today_down_secs)d</li>
+        <li>Overall: %(overall_down_secs)d</li>
+    </ul>
+</div>
+<div>
+    <strong>Up percentage:</strong>
+    <ul>
+        <li>Today: %(today_up_percentage)f</li>
+        <li>Overall: %(overall_up_percentage)f</li>
+    </ul>
+</div>
+<div>
+    Initial start: %(init_datetime)s
+</div>
+<div>
+    <em>Note: Overall data includes today</em>
+</div>
