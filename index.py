@@ -6,6 +6,7 @@ import smtplib
 import dropbox
 import config
 
+report_queue = []
 init_time = 0
 init_datetime = ""
 start_time = 0
@@ -51,13 +52,14 @@ def handle_failure():
     print("failure")
 
 def output_report():
+    today_down_secs = down_secs["today"] + (int(time.time()) - went_down) if is_down else down_secs["today"]
     print("\n")
     print("---Report---")
     print("success total (today):", success_total["today"])
     print("failure total (today):", failure_total["today"])
     print("is down:", is_down)
     print("went down:", went_down)
-    print("down secs (today):", down_secs["today"])
+    print("down secs (today):", today_down_secs)
     print("\n")
 
 def have_24_hours_passed():
@@ -84,12 +86,13 @@ def generate_html_report():
     pings_overall = success_total["overall"] + failure_total["overall"]
     today_percentage = float(success_total["today"])*(100.0 / float(pings_today))
     overall_percentage = float(success_total["overall"])*(100.0/float(pings_overall))
+    today_down_secs = down_secs["today"] + (int(time.time()) - went_down) if is_down else down_secs["today"]
     template_params = {"date": str(datetime.datetime.now()),
         "today_successes": success_total["today"],
         "overall_successes": success_total["overall"],
         "today_failures": failure_total["today"],
         "overall_failures": failure_total["overall"],
-        "today_down_secs": down_secs["today"],
+        "today_down_secs": today_down_secs,
         "overall_down_secs": down_secs["overall"],
         "today_up_percentage": today_percentage,
         "overall_up_percentage": overall_percentage,
@@ -109,10 +112,12 @@ def send_report_email(report):
     server.sendmail(config.email_addr, config.my_email, message)
     server.quit()
 
-def save_report_to_dropbox(report):
+def save_report_to_dropbox(report, fname=None):
+    if fname is None:
+        fname = str(datetime.datetime.now()) + ".html"
     dbx = dropbox.Dropbox(config.dropbox_access_token)
     contents = report.encode("utf-8")
-    location = config.dropbox_save_location + "/" + str(datetime.datetime.now()) + ".html"
+    location = config.dropbox_save_location + "/" + fname
     print("Uploading report to Dropbox...")
     dbx.files_upload(contents, location)
 
@@ -131,13 +136,20 @@ def main():
         handle_success() if ping() else handle_failure()
         if counter % 5 == 0:
             output_report()
-        # FIXME if internet is down on 24h interval, there will be no reset and today will overflow into the next day
-        if have_24_hours_passed() and not is_down:
+        if have_24_hours_passed():
             add_today_to_overall()
             report = generate_html_report()
-            send_report_email(report)
-            save_report_to_dropbox(report)
             reset()
+            if is_down:
+                report_queue.append({"report": report, "report_time": str(datetime.datetime.now())})
+            else:
+                if report_queue:
+                    for q_report in report_queue:
+                        send_report_email(q_report["report"])
+                        fname = q_report["report_time"] + ".html"
+                        save_report_to_dropbox(q_report["report"], fname)
+                send_report_email(report)
+                save_report_to_dropbox(report)
         counter = ((counter + 1) % 6) or 1
         time.sleep(5)
 
