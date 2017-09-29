@@ -3,6 +3,7 @@ import subprocess
 import time
 import datetime
 import smtplib
+import dropbox
 import config
 
 init_time = 0
@@ -18,7 +19,10 @@ went_down = 0
 down_secs = {"today": 0, "overall": 0}
 
 def is_ping_success(output):
-    return not any(word in failure_words for word in output)
+    for word in failure_words:
+        if word in output:
+            return False
+    return True
 
 def ping():
     output = str(subprocess.Popen(["ping", host], stdout = subprocess.PIPE).communicate()[0])
@@ -47,12 +51,14 @@ def handle_failure():
     print("failure")
 
 def output_report():
+    print("\n")
     print("---Report---")
     print("success total (today):", success_total["today"])
     print("failure total (today):", failure_total["today"])
     print("is down:", is_down)
     print("went down:", went_down)
     print("down secs (today):", down_secs["today"])
+    print("\n")
 
 def have_24_hours_passed():
     start_plus_24_h = start_time + (24 * 60 * 60)
@@ -92,18 +98,23 @@ def generate_html_report():
         template_str = template_file.read()
         return template_str % template_params
 
-def send_report_email():
-    add_today_to_overall()
-    report = generate_html_report()
+def send_report_email(report):
     email_from = "From: Trite app <" + config.email_addr + ">"
     email_to = "To: " + config.my_name + "<" + config.my_email + ">"
     message = email_from + "\n" + email_to + "\nMIME-Version: 1.0\nContent-Type: text/html\nSubject: Your daily Trite report\n" + report
     server = smtplib.SMTP(config.smtp_server, config.smtp_port)
     server.starttls()
     server.login(config.email_addr, config.email_pass)
-    println("Sending report email...")
+    print("Sending report email...")
     server.sendmail(config.email_addr, config.my_email, message)
     server.quit()
+
+def save_report_to_dropbox(report):
+    dbx = dropbox.Dropbox(config.dropbox_access_token)
+    contents = report.encode("utf-8")
+    location = config.dropbox_save_location + "/" + str(datetime.datetime.now()) + ".html"
+    print("Uploading report to Dropbox...")
+    dbx.files_upload(contents, location)
 
 def init():
     global start_time
@@ -120,8 +131,12 @@ def main():
         handle_success() if ping() else handle_failure()
         if counter % 5 == 0:
             output_report()
+        # FIXME if internet is down on 24h interval, there will be no reset and today will overflow into the next day
         if have_24_hours_passed() and not is_down:
-            send_report_email()
+            add_today_to_overall()
+            report = generate_html_report()
+            send_report_email(report)
+            save_report_to_dropbox(report)
             reset()
         counter = ((counter + 1) % 6) or 1
         time.sleep(5)

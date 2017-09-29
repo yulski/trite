@@ -1,2 +1,7 @@
 config.py
 __pycache__
+Include
+Lib
+Scripts
+tcl
+pip-selfcheck.json
